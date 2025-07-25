@@ -74,7 +74,7 @@ setup(
         "click>=7.0,<8.1",
         "cryptography>=3.3",
         "flask>=1.1.1,<2.1",
-        "h11>=0.11,<0.13",
+        "h11>=0.16",
         "h2>=4.1,<5",
         "hyperframe>=6.0,<7",
         "kaitaistruct>=0.7,<0.10",
