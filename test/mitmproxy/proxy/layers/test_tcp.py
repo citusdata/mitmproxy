@@ -5,6 +5,7 @@ from ..tutils import Playbook
 from ..tutils import reply
 from mitmproxy import connection
 from mitmproxy import options
+from mitmproxy.proxy import context as proxy_context
 from mitmproxy.proxy.commands import CloseConnection
 from mitmproxy.proxy.commands import CloseTcpConnection
 from mitmproxy.proxy.commands import OpenConnection
@@ -13,7 +14,6 @@ from mitmproxy.proxy.events import ConnectionClosed
 from mitmproxy.proxy.events import DataReceived
 from mitmproxy.proxy.layers import tcp
 from mitmproxy.proxy.layers.tcp import TcpMessageInjected
-from mitmproxy.proxy import context as proxy_context
 from mitmproxy.tcp import TCPFlow
 from mitmproxy.tcp import TCPMessage
 
