@@ -3,6 +3,8 @@ import pytest
 from ..tutils import Placeholder
 from ..tutils import Playbook
 from ..tutils import reply
+from mitmproxy import connection
+from mitmproxy import options
 from mitmproxy.proxy.commands import CloseConnection
 from mitmproxy.proxy.commands import CloseTcpConnection
 from mitmproxy.proxy.commands import OpenConnection
@@ -11,6 +13,7 @@ from mitmproxy.proxy.events import ConnectionClosed
 from mitmproxy.proxy.events import DataReceived
 from mitmproxy.proxy.layers import tcp
 from mitmproxy.proxy.layers.tcp import TcpMessageInjected
+from mitmproxy.proxy import context as proxy_context
 from mitmproxy.tcp import TCPFlow
 from mitmproxy.tcp import TCPMessage
 
@@ -151,26 +154,37 @@ def test_inject(tctx):
     assert len(f().messages) == 2
 
 
+def _build_tctx() -> proxy_context.Context:
+    opts = options.Options()
+    client = connection.Client(
+        peername=("client", 1234),
+        sockname=("127.0.0.1", 8080),
+        state=connection.ConnectionState.OPEN,
+        timestamp_start=1605699329,
+    )
+    return proxy_context.Context(client, opts)
 
-def test_kill_closes_connection_when_flow_not_live(tctx):
+
+def test_kill_closes_connection_when_flow_not_live():
     """If a TCP flow is marked not live, the layer should close rather than relay data."""
 
     def mark_flow_dead(flow: TCPFlow) -> None:
         flow.live = False
 
     f = Placeholder(TCPFlow)
+    tctx = _build_tctx()
 
     assert (
-            Playbook(tcp.TCPLayer(tctx))
-            << tcp.TcpStartHook(f)
-            >> reply()
-            << OpenConnection(tctx.server)
-            >> reply(None)
-            >> DataReceived(tctx.client, b"terminate")
-            << tcp.TcpMessageHook(f)
-            >> reply(side_effect=mark_flow_dead)
-            << CloseConnection(tctx.server, half_close=True)
-            << None
+        Playbook(tcp.TCPLayer(tctx))
+        << tcp.TcpStartHook(f)
+        >> reply()
+        << OpenConnection(tctx.server)
+        >> reply(None)
+        >> DataReceived(tctx.client, b"terminate")
+        << tcp.TcpMessageHook(f)
+        >> reply(side_effect=mark_flow_dead)
+        << CloseTcpConnection(tctx.server, half_close=True)
+        << None
     )
 
     flow = f()
