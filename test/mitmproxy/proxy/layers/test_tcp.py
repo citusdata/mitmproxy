@@ -149,3 +149,31 @@ def test_inject(tctx):
         << None
     )
     assert len(f().messages) == 2
+
+
+
+def test_kill_closes_connection_when_flow_not_live(tctx):
+    """If a TCP flow is marked not live, the layer should close rather than relay data."""
+
+    def mark_flow_dead(flow: TCPFlow) -> None:
+        flow.live = False
+
+    f = Placeholder(TCPFlow)
+
+    assert (
+            Playbook(tcp.TCPLayer(tctx))
+            << tcp.TcpStartHook(f)
+            >> reply()
+            << OpenConnection(tctx.server)
+            >> reply(None)
+            >> DataReceived(tctx.client, b"terminate")
+            << tcp.TcpMessageHook(f)
+            >> reply(side_effect=mark_flow_dead)
+            << CloseConnection(tctx.server, half_close=True)
+            << None
+    )
+
+    flow = f()
+    assert flow is not None
+    assert flow.live is False
+    assert flow.messages[-1].content == b"terminate"
