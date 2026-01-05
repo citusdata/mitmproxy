@@ -1,9 +1,8 @@
 import asyncio
-import pytest
 
+from mitmproxy import command
 from mitmproxy.addons import keepserving
 from mitmproxy.test import taddons
-from mitmproxy import command
 
 
 class Dummy:
@@ -27,6 +26,10 @@ class Dummy:
     def sreplay(self) -> int:
         return 1 if self.val else 0
 
+    @command.command("proxyserver.active_connections")
+    def active_connections(self) -> int:
+        return 1 if self.val else 0
+
 
 class TKS(keepserving.KeepServing):
     _is_shutdown = False
@@ -35,7 +38,6 @@ class TKS(keepserving.KeepServing):
         self.is_shutdown = True
 
 
-@pytest.mark.asyncio
 async def test_keepserving():
     ks = TKS()
     d = Dummy(True)

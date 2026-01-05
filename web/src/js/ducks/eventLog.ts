@@ -1,74 +1,81 @@
-import * as store from "./utils/store"
+import { createAction, UnknownAction } from "@reduxjs/toolkit";
 
-export const ADD = 'EVENTS_ADD'
-export const RECEIVE = 'EVENTS_RECEIVE'
-export const TOGGLE_VISIBILITY = 'EVENTS_TOGGLE_VISIBILITY'
-export const TOGGLE_FILTER = 'EVENTS_TOGGLE_FILTER'
+export const EVENTS_ADD = createAction<EventLogItem>("EVENTS_ADD");
+export const EVENTS_RECEIVE = createAction<EventLogItem[]>("EVENTS_RECEIVE");
+export const toggleVisibility = createAction("events/toggleVisibility");
+export const toggleFilter = createAction<LogLevel>("events/toggleFilter");
 
-type LogLevel = 'debug' | 'info' | 'web' | 'warn' | 'error';
-
-export interface EventLogItem extends store.Item {
-    message: string
-    level: LogLevel
+export enum LogLevel {
+    debug = "debug",
+    info = "info",
+    web = "web",
+    warn = "warn",
+    error = "error",
 }
 
-interface EventLogState extends store.State<EventLogItem> {
-    visible: boolean,
-    filters: { [level in LogLevel]: boolean }
+export interface EventLogItem {
+    id: string;
+    message: string;
+    level: LogLevel;
 }
 
-const defaultState: EventLogState = {
+interface EventLogState {
+    visible: boolean;
+    filters: { [level in LogLevel]: boolean };
+    list: EventLogItem[];
+    view: EventLogItem[];
+}
+
+export const defaultState: EventLogState = {
     visible: false,
-    filters: {debug: false, info: true, web: true, warn: true, error: true},
-    ...store.defaultState
+    filters: { debug: false, info: true, web: true, warn: true, error: true },
+    list: [],
+    view: [],
 };
 
-export default function reduce(state: EventLogState = defaultState, action): EventLogState {
-    switch (action.type) {
-
-        case TOGGLE_VISIBILITY:
-            return {
-                ...state,
-                visible: !state.visible
-            }
-
-        case TOGGLE_FILTER:
-            const filters = {...state.filters, [action.filter]: !state.filters[action.filter]}
-            return {
-                ...state,
-                filters,
-                ...store.reduce(state, store.setFilter<EventLogItem>(log => filters[log.level]))
-            }
-
-        case ADD:
-        case RECEIVE:
-            return {
-                ...state,
-                ...store.reduce(state, store[action.cmd](action.data, log => state.filters[log.level]))
-            }
-
-        default:
-            return state
+export default function eventLogReducer(
+    state = defaultState,
+    action: UnknownAction,
+): EventLogState {
+    if (EVENTS_ADD.match(action)) {
+        const logItem = action.payload;
+        return {
+            ...state,
+            list: [...state.list, logItem],
+            view: state.filters[logItem.level]
+                ? [...state.view, logItem]
+                : state.view,
+        };
+    } else if (EVENTS_RECEIVE.match(action)) {
+        return {
+            ...state,
+            list: action.payload,
+            view: action.payload.filter((log) => state.filters[log.level]),
+        };
+    } else if (toggleVisibility.match(action)) {
+        return {
+            ...state,
+            visible: !state.visible,
+        };
+    } else if (toggleFilter.match(action)) {
+        const filters = {
+            ...state.filters,
+            [action.payload]: !state.filters[action.payload],
+        };
+        return {
+            ...state,
+            filters,
+            view: state.list.filter((log) => filters[log.level]),
+        };
+    } else {
+        return state;
     }
 }
 
-export function toggleFilter(filter: LogLevel) {
-    return {type: TOGGLE_FILTER, filter}
-}
-
-export function toggleVisibility() {
-    return {type: TOGGLE_VISIBILITY}
-}
-
-export function add(message: string, level: LogLevel = 'web') {
-    let data = {
+export function add(message: string, level: LogLevel = LogLevel.web) {
+    return EVENTS_ADD({
         id: Math.random().toString(),
         message,
         level,
-    }
-    return {
-        type: ADD,
-        cmd: "add",
-        data
-    }
+    });
 }

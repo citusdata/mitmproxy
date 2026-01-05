@@ -1,22 +1,16 @@
-import * as React from "react"
-import renderer from 'react-test-renderer'
-import ToggleButton from '../../../components/common/ToggleButton'
+import * as React from "react";
+import ToggleButton from "../../../components/common/ToggleButton";
+import { fireEvent, render, screen } from "../../test-utils";
 
-describe('ToggleButton Component', () => {
-    let mockFunc = jest.fn()
+describe("ToggleButton Component", () => {
+    const mockFunc = jest.fn();
 
-    it('should render correctly', () => {
-        let checkedButton = renderer.create(
-                <ToggleButton checked={true} onToggle={mockFunc} text="foo"/>),
-        tree = checkedButton.toJSON()
-        expect(tree).toMatchSnapshot()
-    })
-
-    it('should handle click action', () => {
-        let uncheckButton = renderer.create(
-            <ToggleButton checked={false} onToggle={mockFunc} text="foo"/>),
-        tree = uncheckButton.toJSON()
-        tree.props.onClick()
-        expect(mockFunc).toBeCalled()
-    })
-})
+    it("should render correctly", () => {
+        const { asFragment } = render(
+            <ToggleButton checked={true} onToggle={mockFunc} text="foo" />,
+        );
+        expect(asFragment()).toMatchSnapshot();
+        fireEvent.click(screen.getByText("foo"));
+        expect(mockFunc).toBeCalled();
+    });
+});

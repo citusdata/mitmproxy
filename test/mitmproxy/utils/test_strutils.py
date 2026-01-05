@@ -27,14 +27,14 @@ def test_escape_control_characters():
     assert strutils.escape_control_characters("\nne", False) == ".ne"
     assert strutils.escape_control_characters("\u2605") == "\u2605"
     assert (
-        strutils.escape_control_characters(bytes(bytearray(range(128))).decode()) ==
-        '.........\t\n..\r.................. !"#$%&\'()*+,-./0123456789:;<'
-        '=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~.'
+        strutils.escape_control_characters(bytes(bytearray(range(128))).decode())
+        == ".........\t\n..\r.................. !\"#$%&'()*+,-./0123456789:;<"
+        "=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~."
     )
     assert (
-        strutils.escape_control_characters(bytes(bytearray(range(128))).decode(), False) ==
-        '................................ !"#$%&\'()*+,-./0123456789:;<'
-        '=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~.'
+        strutils.escape_control_characters(bytes(bytearray(range(128))).decode(), False)
+        == "................................ !\"#$%&'()*+,-./0123456789:;<"
+        "=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~."
     )
 
     with pytest.raises(ValueError):
@@ -44,8 +44,8 @@ def test_escape_control_characters():
 def test_bytes_to_escaped_str():
     assert strutils.bytes_to_escaped_str(b"foo") == "foo"
     assert strutils.bytes_to_escaped_str(b"\b") == r"\x08"
-    assert strutils.bytes_to_escaped_str(br"&!?=\)") == r"&!?=\\)"
-    assert strutils.bytes_to_escaped_str(b'\xc3\xbc') == r"\xc3\xbc"
+    assert strutils.bytes_to_escaped_str(rb"&!?=\)") == r"&!?=\\)"
+    assert strutils.bytes_to_escaped_str(b"\xc3\xbc") == r"\xc3\xbc"
     assert strutils.bytes_to_escaped_str(b"'") == r"'"
     assert strutils.bytes_to_escaped_str(b'"') == r'"'
 
@@ -55,10 +55,13 @@ def test_bytes_to_escaped_str():
     assert strutils.bytes_to_escaped_str(b"\r\n\t") == "\\r\\n\\t"
     assert strutils.bytes_to_escaped_str(b"\r\n\t", True) == "\r\n\t"
 
+    assert strutils.bytes_to_escaped_str(b"\n", False) == r"\n"
     assert strutils.bytes_to_escaped_str(b"\n", True) == "\n"
     assert strutils.bytes_to_escaped_str(b"\\n", True) == "\\ \\ n".replace(" ", "")
     assert strutils.bytes_to_escaped_str(b"\\\n", True) == "\\ \\ \n".replace(" ", "")
-    assert strutils.bytes_to_escaped_str(b"\\\\n", True) == "\\ \\ \\ \\ n".replace(" ", "")
+    assert strutils.bytes_to_escaped_str(b"\\\\n", True) == "\\ \\ \\ \\ n".replace(
+        " ", ""
+    )
 
     with pytest.raises(ValueError):
         strutils.bytes_to_escaped_str("such unicode")
@@ -67,19 +70,30 @@ def test_bytes_to_escaped_str():
 def test_escaped_str_to_bytes():
     assert strutils.escaped_str_to_bytes("foo") == b"foo"
     assert strutils.escaped_str_to_bytes("\x08") == b"\b"
-    assert strutils.escaped_str_to_bytes("&!?=\\\\)") == br"&!?=\)"
+    assert strutils.escaped_str_to_bytes("&!?=\\\\)") == rb"&!?=\)"
     assert strutils.escaped_str_to_bytes("\\x08") == b"\b"
-    assert strutils.escaped_str_to_bytes("&!?=\\\\)") == br"&!?=\)"
-    assert strutils.escaped_str_to_bytes("\u00fc") == b'\xc3\xbc'
+    assert strutils.escaped_str_to_bytes("&!?=\\\\)") == rb"&!?=\)"
+    assert strutils.escaped_str_to_bytes("\u00fc") == b"\xc3\xbc"
 
     with pytest.raises(ValueError):
         strutils.escaped_str_to_bytes(b"very byte")
 
 
 def test_is_mostly_bin():
-    assert not strutils.is_mostly_bin(b"foo\xFF")
-    assert strutils.is_mostly_bin(b"foo" + b"\xFF" * 10)
-    assert not strutils.is_mostly_bin("")
+    assert not strutils.is_mostly_bin(b"foo\xff")
+    assert strutils.is_mostly_bin(b"foo" + b"\xff" * 10)
+    assert not strutils.is_mostly_bin(b"")
+    assert strutils.is_mostly_bin(b"\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09")
+    # shift UTF8 break point
+    # 𐍅 is four bytes in UTF-8, so we're breaking the 100 chars barrier.
+    assert not strutils.is_mostly_bin(b"" + 50 * "𐍅".encode())
+    assert not strutils.is_mostly_bin(b"a" + 50 * "𐍅".encode())
+    assert not strutils.is_mostly_bin(b"aa" + 50 * "𐍅".encode())
+    assert not strutils.is_mostly_bin(b"aaa" + 50 * "𐍅".encode())
+    assert not strutils.is_mostly_bin(b"aaaa" + 50 * "𐍅".encode())
+    assert not strutils.is_mostly_bin(b"aaaaa" + 50 * "𐍅".encode())
+    # only utf8 continuation chars
+    assert strutils.is_mostly_bin(150 * b"\x80")
 
 
 def test_is_xml():
@@ -101,29 +115,50 @@ def test_hexdump():
 
 ESCAPE_QUOTES = [
     "'" + strutils.SINGLELINE_CONTENT + strutils.NO_ESCAPE + "'",
-    '"' + strutils.SINGLELINE_CONTENT + strutils.NO_ESCAPE + '"'
+    '"' + strutils.SINGLELINE_CONTENT + strutils.NO_ESCAPE + '"',
 ]
 
 
 def test_split_special_areas():
     assert strutils.split_special_areas("foo", ESCAPE_QUOTES) == ["foo"]
-    assert strutils.split_special_areas("foo 'bar' baz", ESCAPE_QUOTES) == ["foo ", "'bar'", " baz"]
+    assert strutils.split_special_areas("foo 'bar' baz", ESCAPE_QUOTES) == [
+        "foo ",
+        "'bar'",
+        " baz",
+    ]
+    assert strutils.split_special_areas("""foo 'b\\'a"r' baz""", ESCAPE_QUOTES) == [
+        "foo ",
+        "'b\\'a\"r'",
+        " baz",
+    ]
     assert strutils.split_special_areas(
-        """foo 'b\\'a"r' baz""",
-        ESCAPE_QUOTES
-    ) == ["foo ", "'b\\'a\"r'", " baz"]
-    assert strutils.split_special_areas(
-        "foo\n/*bar\nbaz*/\nqux",
-        [r'/\*[\s\S]+?\*/']
+        "foo\n/*bar\nbaz*/\nqux", [r"/\*[\s\S]+?\*/"]
     ) == ["foo\n", "/*bar\nbaz*/", "\nqux"]
-    assert strutils.split_special_areas(
-        "foo\n//bar\nbaz",
-        [r'//.+$']
-    ) == ["foo\n", "//bar", "\nbaz"]
+    assert strutils.split_special_areas("foo\n//bar\nbaz", [r"//.+$"]) == [
+        "foo\n",
+        "//bar",
+        "\nbaz",
+    ]
 
 
 def test_escape_special_areas():
-    assert strutils.escape_special_areas('foo "bar" baz', ESCAPE_QUOTES, "*") == 'foo "bar" baz'
+    assert (
+        strutils.escape_special_areas('foo "bar" baz', ESCAPE_QUOTES, "*")
+        == 'foo "bar" baz'
+    )
     esc = strutils.escape_special_areas('foo "b*r" b*z', ESCAPE_QUOTES, "*")
     assert esc == 'foo "b\ue02ar" b*z'
     assert strutils.unescape_special_areas(esc) == 'foo "b*r" b*z'
+
+
+@pytest.mark.parametrize(
+    "content,n,expected",
+    [
+        ("foo\nbar\nbaz", 1, "foo\n"),
+        ("foo\nbar\nbaz", 2, "foo\nbar\n"),
+        ("foo\nbar", 100, "foo\nbar"),
+        ("\nbar", 1, "\n"),
+    ],
+)
+def test_cut_after_n_newlines(content, n, expected):
+    assert strutils.cut_after_n_lines(content, n) == expected

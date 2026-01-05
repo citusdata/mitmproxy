@@ -1,53 +1,80 @@
 import * as React from "react";
-import Button from "../common/Button"
-import {canReplay, MessageUtils} from "../../flow/utils"
-import HideInStatic from "../common/HideInStatic";
-import {useAppDispatch, useAppSelector} from "../../ducks";
-import * as flowActions from "../../ducks/flows"
+import Button from "../common/Button";
 import {
-    duplicate as duplicateFlow,
-    kill as killFlow,
-    remove as removeFlow,
-    replay as replayFlow,
-    resume as resumeFlow,
-    revert as revertFlow
-} from "../../ducks/flows"
-import Dropdown, {MenuItem} from "../common/Dropdown";
-import {copy} from "../../flow/export";
-import {Flow} from "../../flow";
+    canReplay,
+    canResumeOrKill,
+    canRevert,
+    MessageUtils,
+} from "../../flow/utils";
+import HideInStatic from "../common/HideInStatic";
+import { useAppDispatch, useAppSelector } from "../../ducks";
+import {
+    duplicate as duplicateFlows,
+    kill as killFlows,
+    remove as removeFlows,
+    replay as replayFlows,
+    resume as resumeFlows,
+    revert as revertFlows,
+    mark as markFlows,
+} from "../../ducks/flows";
+import Dropdown, { MenuItem } from "../common/Dropdown";
+import { copy } from "../../flow/export";
+import { Flow } from "../../flow";
 
-FlowMenu.title = 'Flow'
+import type { JSX } from "react";
+
+FlowMenu.title = "Flow";
 
 export default function FlowMenu(): JSX.Element {
-    const dispatch = useAppDispatch(),
-        flow = useAppSelector(state => state.flows.byId[state.flows.selected[0]])
+    const dispatch = useAppDispatch();
 
-    if (!flow)
-        return <div/>
+    const selectedFlows = useAppSelector((state) => state.flows.selected);
+    const flow = selectedFlows[0];
+
+    const canResumeOrKillAny = selectedFlows.some(canResumeOrKill);
+
+    if (selectedFlows.length === 0) return <div />;
     return (
         <div className="flow-menu">
             <HideInStatic>
                 <div className="menu-group">
                     <div className="menu-content">
-                        <Button title="[r]eplay flow" icon="fa-repeat text-primary"
-                                onClick={() => dispatch(replayFlow(flow))}
-                                disabled={!canReplay(flow)}
+                        <Button
+                            title="[r]eplay flow"
+                            icon="fa-repeat text-primary"
+                            onClick={() => dispatch(replayFlows(selectedFlows))}
+                            disabled={!selectedFlows.some(canReplay)}
                         >
                             Replay
                         </Button>
-                        <Button title="[D]uplicate flow" icon="fa-copy text-info"
-                                onClick={() => dispatch(duplicateFlow(flow))}>
+                        <Button
+                            title="[D]uplicate flow"
+                            icon="fa-copy text-info"
+                            onClick={() =>
+                                dispatch(duplicateFlows(selectedFlows))
+                            }
+                        >
                             Duplicate
                         </Button>
-                        <Button disabled={!flow || !flow.modified} title="revert changes to flow [V]"
-                                icon="fa-history text-warning" onClick={() => dispatch(revertFlow(flow))}>
+                        <Button
+                            disabled={!selectedFlows.some(canRevert)}
+                            title="revert changes to flow [V]"
+                            icon="fa-history text-warning"
+                            onClick={() => dispatch(revertFlows(selectedFlows))}
+                        >
                             Revert
                         </Button>
-                        <Button title="[d]elete flow" icon="fa-trash text-danger"
-                                onClick={() => dispatch(removeFlow(flow))}>
+                        <Button
+                            title="[d]elete flow"
+                            icon="fa-trash text-danger"
+                            onClick={() => {
+                                dispatch(removeFlows(selectedFlows));
+                            }}
+                        >
                             Delete
                         </Button>
-                        <MarkButton flow={flow}/>
+
+                        <MarkButton flows={selectedFlows} />
                     </div>
                     <div className="menu-legend">Flow Modification</div>
                 </div>
@@ -55,8 +82,8 @@ export default function FlowMenu(): JSX.Element {
 
             <div className="menu-group">
                 <div className="menu-content">
-                    <DownloadButton flow={flow}/>
-                    <ExportButton flow={flow}/>
+                    <DownloadButton flow={flow} />
+                    <ExportButton flow={flow} />
                 </div>
                 <div className="menu-legend">Export</div>
             </div>
@@ -64,12 +91,20 @@ export default function FlowMenu(): JSX.Element {
             <HideInStatic>
                 <div className="menu-group">
                     <div className="menu-content">
-                        <Button disabled={!flow || !flow.intercepted} title="[a]ccept intercepted flow"
-                                icon="fa-play text-success" onClick={() => dispatch(resumeFlow(flow))}>
+                        <Button
+                            disabled={!canResumeOrKillAny}
+                            title="[a]ccept intercepted flow"
+                            icon="fa-play text-success"
+                            onClick={() => dispatch(resumeFlows(selectedFlows))}
+                        >
                             Resume
                         </Button>
-                        <Button disabled={!flow || !flow.intercepted} title="kill intercepted flow [x]"
-                                icon="fa-times text-danger" onClick={() => dispatch(killFlow(flow))}>
+                        <Button
+                            disabled={!canResumeOrKillAny}
+                            title="kill intercepted flow [x]"
+                            icon="fa-times text-danger"
+                            onClick={() => dispatch(killFlows(selectedFlows))}
+                        >
                             Abort
                         </Button>
                     </div>
@@ -77,59 +112,130 @@ export default function FlowMenu(): JSX.Element {
                 </div>
             </HideInStatic>
         </div>
-    )
+    );
 }
 
 // Reference: https://stackoverflow.com/a/63627688/9921431
 const openInNewTab = (url) => {
-  const newWindow = window.open(url, '_blank', 'noopener,noreferrer')
-  if (newWindow) newWindow.opener = null
-}
+    const newWindow = window.open(url, "_blank", "noopener,noreferrer");
+    if (newWindow) newWindow.opener = null;
+};
 
-function DownloadButton({flow}: { flow: Flow }) {
+function DownloadButton({ flow }: { flow: Flow }) {
+    const hasSingleFlowSelected = useAppSelector(
+        (state) => state.flows.selected.length === 1,
+    );
+
     if (flow.type !== "http")
-        return <Button icon="fa-download" onClick={() => 0} disabled>Download</Button>;
+        return (
+            <Button icon="fa-download" onClick={() => 0} disabled>
+                Download
+            </Button>
+        );
 
     if (flow.request.contentLength && !flow.response?.contentLength) {
-        return <Button icon="fa-download"
-                       onClick={() => openInNewTab(MessageUtils.getContentURL(flow, flow.request))}
-        >Download</Button>
+        return (
+            <Button
+                icon="fa-download"
+                onClick={() =>
+                    openInNewTab(MessageUtils.getContentURL(flow, flow.request))
+                }
+                disabled={!hasSingleFlowSelected}
+            >
+                Download
+            </Button>
+        );
     }
     if (flow.response) {
         const response = flow.response;
         if (!flow.request.contentLength && flow.response.contentLength) {
-            return <Button icon="fa-download"
-                           onClick={() => openInNewTab(MessageUtils.getContentURL(flow, response))}
-            >Download</Button>
+            return (
+                <Button
+                    icon="fa-download"
+                    onClick={() =>
+                        openInNewTab(MessageUtils.getContentURL(flow, response))
+                    }
+                    disabled={!hasSingleFlowSelected}
+                >
+                    Download
+                </Button>
+            );
         }
         if (flow.request.contentLength && flow.response.contentLength) {
-            return <Dropdown text={
-                <Button icon="fa-download" onClick={() => 1}>Download▾</Button>
-            } options={{"placement": "bottom-start"}}>
-                <MenuItem onClick={() => openInNewTab(MessageUtils.getContentURL(flow, flow.request))}>Download
-                    request</MenuItem>
-                <MenuItem onClick={() => openInNewTab(MessageUtils.getContentURL(flow, response))}>Download
-                    response</MenuItem>
-            </Dropdown>
+            return (
+                <Dropdown
+                    text={
+                        <Button
+                            icon="fa-download"
+                            onClick={() => 1}
+                            disabled={!hasSingleFlowSelected}
+                        >
+                            Download▾
+                        </Button>
+                    }
+                    options={{ placement: "bottom-start" }}
+                >
+                    <MenuItem
+                        onClick={() =>
+                            openInNewTab(
+                                MessageUtils.getContentURL(flow, flow.request),
+                            )
+                        }
+                    >
+                        Download request
+                    </MenuItem>
+                    <MenuItem
+                        onClick={() =>
+                            openInNewTab(
+                                MessageUtils.getContentURL(flow, response),
+                            )
+                        }
+                    >
+                        Download response
+                    </MenuItem>
+                </Dropdown>
+            );
         }
     }
 
     return null;
 }
 
-function ExportButton({flow}: { flow: Flow }) {
-    return <Dropdown className="" text={
-        <Button title="Export flow." icon="fa-clone" onClick={() => 1}
-                disabled={flow.type === "tcp"}>Export▾</Button>
-    } options={{"placement": "bottom-start"}}>
-        <MenuItem onClick={() => copy(flow, "raw_request")}>Copy raw request</MenuItem>
-        <MenuItem onClick={() => copy(flow, "raw_response")}>Copy raw response</MenuItem>
-        <MenuItem onClick={() => copy(flow, "raw")}>Copy raw request and response</MenuItem>
-        <MenuItem onClick={() => copy(flow, "curl")}>Copy as cURL</MenuItem>
-        <MenuItem onClick={() => copy(flow, "httpie")}>Copy as HTTPie</MenuItem>
-    </Dropdown>
+function ExportButton({ flow }: { flow: Flow }) {
+    const hasSingleFlowSelected = useAppSelector(
+        (state) => state.flows.selected.length === 1,
+    );
+    return (
+        <Dropdown
+            className=""
+            text={
+                <Button
+                    title="Export flow."
+                    icon="fa-clone"
+                    onClick={() => 1}
+                    disabled={flow.type !== "http" || !hasSingleFlowSelected}
+                >
+                    Export▾
+                </Button>
+            }
+            options={{ placement: "bottom-start" }}
+        >
+            <MenuItem onClick={() => copy(flow, "raw_request")}>
+                Copy raw request
+            </MenuItem>
+            <MenuItem onClick={() => copy(flow, "raw_response")}>
+                Copy raw response
+            </MenuItem>
+            <MenuItem onClick={() => copy(flow, "raw")}>
+                Copy raw request and response
+            </MenuItem>
+            <MenuItem onClick={() => copy(flow, "curl")}>Copy as cURL</MenuItem>
+            <MenuItem onClick={() => copy(flow, "httpie")}>
+                Copy as HTTPie
+            </MenuItem>
+        </Dropdown>
+    );
 }
-
 
 const markers = {
     ":red_circle:": "🔴",
@@ -139,21 +245,35 @@ const markers = {
     ":large_blue_circle:": "🔵",
     ":purple_circle:": "🟣",
     ":brown_circle:": "🟤",
-}
+};
 
-function MarkButton({flow}: { flow: Flow }) {
+function MarkButton({ flows }: { flows: Flow[] }) {
     const dispatch = useAppDispatch();
-    return <Dropdown className="" text={
-        <Button title="mark flow" icon="fa-paint-brush text-success" onClick={() => 1}>Mark▾</Button>
-    } options={{"placement": "bottom-start"}}>
-        <MenuItem onClick={() => dispatch(flowActions.update(flow, {marked: ""}))}>⚪ (no
-            marker)</MenuItem>
-        {Object.entries(markers).map(([name, sym]) =>
-            <MenuItem
-                key={name}
-                onClick={() => dispatch(flowActions.update(flow, {marked: name}))}>
-                {sym} {name.replace(/[:_]/g, " ")}
+    return (
+        <Dropdown
+            className=""
+            text={
+                <Button
+                    title="mark flow"
+                    icon="fa-paint-brush text-success"
+                    onClick={() => 1}
+                >
+                    Mark▾
+                </Button>
+            }
+            options={{ placement: "bottom-start" }}
+        >
+            <MenuItem onClick={() => dispatch(markFlows(flows, ""))}>
+                ⚪ (no marker)
             </MenuItem>
-        )}
-    </Dropdown>
+            {Object.entries(markers).map(([name, sym]) => (
+                <MenuItem
+                    key={name}
+                    onClick={() => dispatch(markFlows(flows, name))}
+                >
+                    {sym} {name.replace(/[:_]/g, " ")}
+                </MenuItem>
+            ))}
+        </Dropdown>
+    );
 }

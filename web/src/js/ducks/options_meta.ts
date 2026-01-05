@@ -1,36 +1,26 @@
-import {Reducer} from "redux";
-import {RECEIVE, UPDATE} from "./options";
-import {OptionsState} from "./_options_gen";
+import {
+    OPTIONS_RECEIVE,
+    OPTIONS_UPDATE,
+    OptionsStateWithMeta,
+} from "./options";
+import { createSlice } from "@reduxjs/toolkit";
 
-interface OptionMeta<T> {
-    value: T
-    choices?: T[]
-    default: T
-    help: string
-    type: string
-}
+export type OptionsMetaState = Partial<OptionsStateWithMeta>;
 
-type OptionsMetaState = Partial<{
-    [name in keyof OptionsState]: OptionMeta<OptionsState[name]>
-}>
+export const defaultState: OptionsMetaState = {};
 
-export const defaultState: OptionsMetaState = {
-}
-
-const reducer: Reducer<OptionsMetaState> = (state = defaultState, action) => {
-    switch (action.type) {
-
-        case RECEIVE:
-            return action.data
-
-        case UPDATE:
-            return {
+const optionsMeta = createSlice({
+    name: "optionsMeta",
+    initialState: defaultState,
+    reducers: {},
+    extraReducers: (builder) => {
+        builder
+            .addCase(OPTIONS_RECEIVE, (state, action) => action.payload)
+            .addCase(OPTIONS_UPDATE, (state, action) => ({
                 ...state,
-                ...action.data,
-            }
+                ...action.payload,
+            }));
+    },
+});
 
-        default:
-            return state
-    }
-}
-export default reducer
+export default optionsMeta.reducer;

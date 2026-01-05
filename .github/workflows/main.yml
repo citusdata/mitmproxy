@@ -1,149 +1,163 @@
 name: CI
 
-on: [ push, pull_request ]
+on:
+  push:
+    branches:
+      - '**'
+      - '!dependabot/**'
+      - '!*-patch-*'
+  pull_request:
+  merge_group:
+  workflow_dispatch:
 
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  lint-pr:
-    if: github.event_name == 'pull_request'
+  tox:
+    strategy:
+      fail-fast: false
+      matrix:
+        env: [lint, filename_matching, mypy, individual_coverage, old-dependencies, test-offline]
+    name: ${{ matrix.env }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: mhils/workflows/checkout@481eaf3cc2ad8eb664a4c9a20cc635d46e02b5c6
+      - uses: mhils/workflows/setup-uv@481eaf3cc2ad8eb664a4c9a20cc635d46e02b5c6
+      - uses: mhils/workflows/uv-sync@481eaf3cc2ad8eb664a4c9a20cc635d46e02b5c6
         with:
-          persist-credentials: false
-      - uses: TrueBrain/actions-flake8@9a43ff1b2c7b96f3edffc48a49973ce3de116ba1
-        # mirrored at https://github.com/mitmproxy/mitmproxy/settings/actions
-  lint-local:
-    if: github.event_name == 'push'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v2
-        with:
-          persist-credentials: false
-      - uses: actions/setup-python@v2
-        with:
-          python-version: '3.9'
-      - run: pip install tox
-      - run: tox -e flake8
-  filename-matching:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v2
-        with:
-          persist-credentials: false
-      - uses: actions/setup-python@v2
-        with:
-          python-version: '3.9'
-      - run: pip install tox
-      - run: tox -e filename_matching
-  mypy:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v2
-        with:
-          persist-credentials: false
-      - uses: actions/setup-python@v2
-        with:
-          python-version: '3.9'
-      - run: pip install tox
-      - run: tox -e mypy
-  individual-coverage:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v2
-        with:
-          persist-credentials: false
-          fetch-depth: 0
-      - uses: actions/setup-python@v2
-        with:
-          python-version: '3.9'
-      - run: pip install tox
-      - run: tox -e individual_coverage
+          args: --only-group tox
+
+      - run: tox -e ${{ matrix.env }}
+
   test:
     strategy:
       fail-fast: false
       matrix:
         include:
           - os: ubuntu-latest
-            py: '3.10.0-rc - 3.10'
+            py: "3.14"
           - os: windows-latest
-            py: 3.9
+            py: "3.14"
           - os: macos-latest
-            py: 3.9
+            py: "3.14"
           - os: ubuntu-latest
-            py: 3.9
+            py: "3.13"
           - os: ubuntu-latest
-            py: 3.8
+            py: "3.12"
     runs-on: ${{ matrix.os }}
     steps:
-      - run: printenv
-      - uses: actions/checkout@v2
+      - uses: mhils/workflows/checkout@481eaf3cc2ad8eb664a4c9a20cc635d46e02b5c6
+      - uses: mhils/workflows/setup-uv@481eaf3cc2ad8eb664a4c9a20cc635d46e02b5c6
+      - uses: mhils/workflows/uv-sync@481eaf3cc2ad8eb664a4c9a20cc635d46e02b5c6
         with:
-          persist-credentials: false
-          fetch-depth: 0
-      - uses: actions/setup-python@v2
+          args: --only-group tox
+
+      - run: tox -e py${{ matrix.py }}
+      - uses: codecov/codecov-action@v5
         with:
-          python-version: ${{ matrix.py }}
-      - run: pip install tox
-      - run: tox -e py
-      - uses: codecov/codecov-action@a1ed4b322b4b38cb846afb5a0ebfa17086917d27
-        # mirrored below and at https://github.com/mitmproxy/mitmproxy/settings/actions
-        with:
-          file: ./coverage.xml
-          name: ${{ matrix.os }}
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage.xml
 
   build:
     strategy:
       fail-fast: false
       matrix:
         include:
-          - image: macos-10.15
-            platform: macos
-          - image: windows-2019
+          - image: macos-15
+            platform: macos-arm64
+          - image: macos-15-intel
+            platform: macos-x86_64
+          - image: windows-2025
             platform: windows
-          - image: ubuntu-18.04  # Old Ubuntu version for old glibc
-            platform: linux
+          - image: ubuntu-latest
+            platform: linux-x86_64
+            container: debian:11  # Old version so we get oldest glibc possible.
+          - image: ubuntu-24.04-arm
+            platform: linux-arm64
+            container: debian:11  # Old version so we get oldest glibc possible.
     runs-on: ${{ matrix.image }}
-    env:
-      CI_BUILD_WHEEL: ${{ matrix.platform == 'linux' }}
-      CI_BUILD_PYINSTALLER: 1
-      CI_BUILD_WININSTALLER: ${{ matrix.platform == 'windows' }}
-      CI_BUILD_KEY: ${{ secrets.CI_BUILD_KEY }}
+    container:
+      image: ${{ matrix.container }}
     steps:
-      - uses: actions/checkout@v2
+      - if: matrix.container
+        run: |
+          apt-get update
+          apt-get install --no-install-recommends -y git ca-certificates binutils build-essential
+      - uses: mhils/workflows/checkout@481eaf3cc2ad8eb664a4c9a20cc635d46e02b5c6
+      - uses: mhils/workflows/setup-uv@481eaf3cc2ad8eb664a4c9a20cc635d46e02b5c6
+      - uses: mhils/workflows/uv-sync@481eaf3cc2ad8eb664a4c9a20cc635d46e02b5c6
+      - run: uv pip install .  # pyinstaller 5.9 does not like pyproject.toml + editable installs.
+
+      - if: runner.os == 'macOS' && github.repository == 'mitmproxy/mitmproxy'
+            && (startsWith(github.ref, 'refs/heads/') || startsWith(github.ref, 'refs/tags/'))
+        id: keychain
+        uses: apple-actions/import-codesign-certs@95e84a1a18f2bdbc5c6ab9b7f4429372e4b13a8b
         with:
-          persist-credentials: false
-          fetch-depth: 0
-      - uses: actions/setup-python@v2
-        with:
-          python-version: '3.9'
-      - if: matrix.platform == 'windows'
-        uses: actions/cache@v2
-        with:
-          path: release/installbuilder/setup
-          key: installbuilder
-      - run: pip install -e .[dev]
-      - run: python release/cibuild.py build
-      # artifacts must have different names, see https://github.com/actions/upload-artifact/issues/24
-      - uses: actions/upload-artifact@v2
+          keychain: ${{ runner.temp }}/temp
+          p12-file-base64: ${{ secrets.APPLE_CERTIFICATE }}
+          p12-password: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+      - if: runner.os == 'macOS' && github.repository == 'mitmproxy/mitmproxy'
+            && (startsWith(github.ref, 'refs/heads/') || startsWith(github.ref, 'refs/tags/'))
+        run: |
+          python -u release/build.py macos-app \
+            --keychain "${{ runner.temp }}/temp.keychain" \
+            --team-id "S8XHQB96PW" \
+            --apple-id "${{ secrets.APPLE_ID }}" \
+            --password "${{ secrets.APPLE_APP_PASSWORD }}"
+
+      # Linux
+      - if: runner.os == 'Linux'
+        run: python -u release/build.py standalone-binaries
+
+      # Windows
+      - if: runner.os == 'Windows'
+        run: python -u release/build.py standalone-binaries
+
+      - uses: actions/upload-artifact@v5
         with:
           name: binaries.${{ matrix.platform }}
+          path: release/dist
+
+  build-wheel:
+    uses: mhils/workflows/.github/workflows/python-build.yml@481eaf3cc2ad8eb664a4c9a20cc635d46e02b5c6
+    with:
+      artifact: binaries.wheel
+
+  build-windows-installer:
+    runs-on: windows-latest
+    if: github.repository == 'mitmproxy/mitmproxy' && (
+        github.ref == 'refs/heads/main' ||
+        github.ref == 'refs/heads/citest' ||
+        startsWith(github.ref, 'refs/tags/')
+      )
+    steps:
+      - uses: mhils/workflows/checkout@481eaf3cc2ad8eb664a4c9a20cc635d46e02b5c6
+      - uses: mhils/workflows/setup-uv@481eaf3cc2ad8eb664a4c9a20cc635d46e02b5c6
+      - uses: mhils/workflows/uv-sync@481eaf3cc2ad8eb664a4c9a20cc635d46e02b5c6
+      - run: uv pip install .  # pyinstaller 5.9 does not like pyproject.toml + editable installs.
+      - run: python -u release/build.py installbuilder-installer msix-installer
+        env:
+          CI_BUILD_KEY: ${{ secrets.CI_BUILD_KEY }}
+
+      - uses: actions/upload-artifact@v5
+        with:
+          name: binaries.windows-installer
           path: release/dist
 
   test-web-ui:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: mhils/workflows/checkout@481eaf3cc2ad8eb664a4c9a20cc635d46e02b5c6
+      - uses: actions/setup-node@v6
         with:
-          persist-credentials: false
-      - run: git rev-parse --abbrev-ref HEAD
-      - uses: actions/setup-node@v2
-        with:
-          node-version: '14'
+          node-version-file: .github/node-version.txt
       - name: Cache Node.js modules
-        uses: actions/cache@v2
+        uses: actions/cache@v4
         with:
           # npm cache files are stored in `~/.npm` on Linux/macOS
           path: ~/.npm
@@ -155,100 +169,197 @@ jobs:
         run: npm ci
       - working-directory: ./web
         run: npm test
-      - uses: codecov/codecov-action@a1ed4b322b4b38cb846afb5a0ebfa17086917d27
-        # mirrored above and at https://github.com/mitmproxy/mitmproxy/settings/actions
+      - uses: codecov/codecov-action@v5
         with:
-          file: ./web/coverage/coverage-final.json
-          name: web
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./web/coverage/coverage-final.json
+
+  test-docker:
+    runs-on: ubuntu-latest
+    needs: build-wheel
+    steps:
+      - uses: mhils/workflows/checkout@481eaf3cc2ad8eb664a4c9a20cc635d46e02b5c6
+      - uses: actions/download-artifact@v6
+        with:
+          name: binaries.wheel
+          path: release/docker
+      - name: Build container
+        run: docker build --tag localtesting release/docker
+      - name: Test container
+        run: docker run --rm -v $PWD/release:/release localtesting mitmdump -s /release/selftest.py
 
   docs:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
-        with:
-          persist-credentials: false
-      - uses: actions/setup-python@v2
-        with:
-          python-version: '3.9'
+      - uses: mhils/workflows/checkout@481eaf3cc2ad8eb664a4c9a20cc635d46e02b5c6
+      - uses: mhils/workflows/setup-uv@481eaf3cc2ad8eb664a4c9a20cc635d46e02b5c6
+      - uses: mhils/workflows/uv-sync@481eaf3cc2ad8eb664a4c9a20cc635d46e02b5c6
       - run: |
-          wget -q https://github.com/gohugoio/hugo/releases/download/v0.83.1/hugo_extended_0.83.1_Linux-64bit.deb
-          echo "9487ea3b80f8ddd0ba600d42850b96b6a8b0bb9b41bc08cb285635ebbd41328d hugo_extended_0.83.1_Linux-64bit.deb" | sha256sum -c
+          wget -q https://github.com/gohugoio/hugo/releases/download/v0.139.3/hugo_extended_0.139.3_linux-amd64.deb
+          echo "3e58800d1fee57269208d07d104ae1a6ab886615344099f2dca0c6ad5279bc11 hugo_extended_0.139.3_linux-amd64.deb" | sha256sum -c
           sudo dpkg -i hugo*.deb
-      - run: pip install -e .[dev]
+
       - run: ./docs/build.py
-      - uses: actions/upload-artifact@v2
+      - uses: actions/upload-artifact@v5
         with:
           name: docs
           path: docs/public
+      # For releases, also build the archive version of the docs.
+      - run: ./docs/build.py
+        env:
+          DOCS_ARCHIVE: ${{ github.ref_name }}
+      - if: startsWith(github.ref, 'refs/tags/')
+        uses: actions/upload-artifact@v5
+        with:
+          name: docs-archive
+          path: docs/public
+
+  check:
+    if: always()
+    needs:
+    - tox
+    - test
+    - test-docker
+    - test-web-ui
+    - build
+    - build-wheel
+    - build-windows-installer
+    - docs
+    uses: mhils/workflows/.github/workflows/alls-green.yml@481eaf3cc2ad8eb664a4c9a20cc635d46e02b5c6
+    with:
+      jobs: ${{ toJSON(needs) }}
+      allowed-skips: build-windows-installer
 
   # Separate from everything else because slow.
-  build-and-deploy-docker:
+  deploy-docker:
     if: github.repository == 'mitmproxy/mitmproxy' && (
-      github.ref == 'refs/heads/main' ||
-      github.ref == 'refs/heads/dockertest' ||
-      startsWith(github.ref, 'refs/tags/')
+        github.ref == 'refs/heads/main' ||
+        github.ref == 'refs/heads/citest' ||
+        startsWith(github.ref, 'refs/tags/')
       )
+    permissions:
+      id-token: write
+      attestations: write
+      packages: write
     environment: deploy-docker
-    needs:
-     - test
-     - test-web-ui
-     - build
-     - docs
+    needs: check
     runs-on: ubuntu-latest
-    env:
-      CI_BUILD_DOCKER: 1
-      DOCKER_USERNAME: mitmbot
-      DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
     steps:
-      - uses: actions/checkout@v2
+      - uses: mhils/workflows/checkout@481eaf3cc2ad8eb664a4c9a20cc635d46e02b5c6
+      - uses: actions/download-artifact@v6
         with:
-          persist-credentials: false
-      - uses: actions/setup-python@v2
+          name: binaries.wheel
+          path: release/docker
+      - uses: docker/setup-qemu-action@29109295f81e9208d7d86ff1c6c12d2833863392 # v3.6.0
+      - uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435 # v1.6.0
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3.6.0
         with:
-          python-version: '3.9'
-      - uses: actions/download-artifact@v2
+          username: mitmbot
+          password: ${{ secrets.DOCKER_PASSWORD }}
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3.6.0
         with:
-          name: binaries.linux
-          path: release/dist
-      - uses: docker/setup-qemu-action@27d0a4f181a40b142cce983c5393082c365d1480
-      - uses: docker/setup-buildx-action@b1f1f719c7cd5364be7c82e366366da322d01f7c
-      - run: pip install -e .[dev]
-      - run: python release/cibuild.py build
-      - run: python release/cibuild.py upload
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Docker meta
+        id: meta
+        uses: docker/metadata-action@c1e51972afc2121e065aed6d45c65596fe445f3f
+        env:
+          DOCKER_METADATA_ANNOTATIONS_LEVELS: index
+        with:
+          images: |
+            mitmproxy/mitmproxy
+            ghcr.io/mitmproxy/mitmproxy
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=raw,value=dev,enable=${{ github.ref == 'refs/heads/main' }}
+            type=raw,value=citest,enable=${{ github.ref == 'refs/heads/citest' }}
+
+      - name: Build and push
+        id: push
+        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
+        with:
+          context: release/docker
+          platforms: linux/amd64,linux/arm64
+          push: true
+          provenance: false
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          annotations: ${{ steps.meta.outputs.annotations }}
+      - uses: actions/attest-build-provenance@v3
+        with:
+          subject-name: ghcr.io/${{ github.repository }}
+          subject-digest: ${{ steps.push.outputs.digest }}
 
   deploy:
     # This action has access to our AWS keys, so we are extra careful here.
     # In particular, we don't blindly `pip install` anything to minimize the risk of supply chain attacks.
-    if: github.repository == 'mitmproxy/mitmproxy' && github.event_name == 'push'
-    environment: deploy
-    needs:
-      - test
-      - test-web-ui
-      - build
-      - docs
+    if: github.repository == 'mitmproxy/mitmproxy' && (startsWith(github.ref, 'refs/heads/') || startsWith(github.ref, 'refs/tags/'))
+    environment: ${{ (github.ref == 'refs/heads/citest' || startsWith(github.ref, 'refs/tags/')) && 'deploy-release' || 'deploy-snapshot' }}
+    needs: check
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      attestations: write
     env:
-      TWINE_USERNAME: mitmproxy
+      # PyPI and MSFT keys are only available for the deploy-release environment
+      # The AWS access key for snapshots is scoped to branches/* as well.
+      TWINE_USERNAME: __token__
       TWINE_PASSWORD: ${{ secrets.TWINE_PASSWORD }}
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_DEFAULT_REGION: us-west-2
+      MSFT_APP_ID: 9NWNDLQMNZD7
+      MSFT_TENANT_ID: ${{ secrets.MSFT_TENANT_ID }}
+      MSFT_CLIENT_ID: ${{ secrets.MSFT_CLIENT_ID }}
+      MSFT_CLIENT_SECRET: ${{ secrets.MSFT_CLIENT_SECRET }}
+      R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+      R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
     steps:
-      - uses: actions/checkout@v2
+      - uses: mhils/workflows/checkout@481eaf3cc2ad8eb664a4c9a20cc635d46e02b5c6
+      - uses: mhils/workflows/setup-uv@481eaf3cc2ad8eb664a4c9a20cc635d46e02b5c6
+      - uses: mhils/workflows/uv-sync@481eaf3cc2ad8eb664a4c9a20cc635d46e02b5c6
         with:
-          persist-credentials: false
-      - uses: actions/setup-python@v2
+          args: --only-group deploy
+
+      - uses: actions/download-artifact@v6
         with:
-          python-version: '3.9'
-      - run: sudo apt-get update
-      - run: sudo apt-get install -y twine awscli
-      - uses: actions/download-artifact@v2
+          name: docs
+          path: docs/public
+      - if: startsWith(github.ref, 'refs/tags/')
+        uses: actions/download-artifact@v6
         with:
+          name: docs-archive
+          path: docs/archive
+      - uses: actions/download-artifact@v6
+        with:
+          pattern: binaries.*
+          merge-multiple: true
           path: release/dist
-      - run: mv release/dist/docs docs/public
-      # move artifacts from their subfolders into release/dist
-      - run: find release/dist -mindepth 2 -type f -exec mv {} release/dist \;
-      # and then delete the empty folders
-      - run: find release/dist -type d -empty -delete
+      - id: provenance
+        uses: actions/attest-build-provenance@v3
+        with:
+          subject-path: 'release/dist/*'
+      - run: |
+          REF=${{ github.ref_name }}
+          mv ${{ steps.provenance.outputs.bundle-path }} release/dist/mitmproxy-${REF#v}.sigstore
+      - run: ls docs/public
       - run: ls release/dist
+
       - run: ./release/deploy.py
+
+      - name: Deploy to Microsoft Store (test flight)
+        if: github.ref == 'refs/heads/citest'
+        run: ./release/deploy-microsoft-store.py release/dist/*.msix
+        env:
+          MSFT_APP_FLIGHT: 174ca570-8cae-4444-9858-c07293f1f13a
+      - name: Deploy to Microsoft Store
+        if: startsWith(github.ref, 'refs/tags/')
+        run: ./release/deploy-microsoft-store.py release/dist/*.msix

@@ -1,9 +1,11 @@
 {
     "compilerOptions": {
-        "target": "ES6",
-        "moduleResolution": "node",
+        "target": "es2023",
+        "module": "NodeNext",
+        "moduleResolution": "nodenext",
         "esModuleInterop": true,
         "jsx": "react",
         "strictNullChecks": true,
+        "skipLibCheck": true
     }
 }

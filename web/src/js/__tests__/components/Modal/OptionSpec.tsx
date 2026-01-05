@@ -1,99 +1,61 @@
-import * as React from "react"
-import renderer from 'react-test-renderer'
-import { Options, ChoicesOption } from '../../../components/Modal/Option'
+import * as React from "react";
+import { ChoicesOption, Options } from "../../../components/Modal/OptionInput";
+import { fireEvent, render, screen } from "../../test-utils";
 
-describe('BooleanOption Component', () => {
-    let BooleanOption = Options['bool'],
-        onChangeFn = jest.fn(),
-        booleanOption = renderer.create(
-            <BooleanOption value={true} onChange={onChangeFn}/>
-        ),
-        tree = booleanOption.toJSON()
+describe("BooleanOption Component", () => {
+    const BooleanOption = Options["bool"];
 
-    it('should render correctly', () => {
-        expect(tree).toMatchSnapshot()
-    })
+    it("should handle onChange", () => {
+        const onChangeFn = jest.fn();
+        render(<BooleanOption value={true} onChange={onChangeFn} />);
+        fireEvent.click(screen.getByText("Enable"));
+        expect(onChangeFn).toBeCalled();
+    });
+});
 
-    it('should handle onChange', () => {
-        let input = tree.children[0].children[0],
-            mockEvent = { target: { checked: true }}
-        input.props.onChange(mockEvent)
-        expect(onChangeFn).toBeCalledWith(mockEvent.target.checked)
-    })
-})
+describe("StringOption Component", () => {
+    const StringOption = Options["str"];
 
-describe('StringOption Component', () => {
-    let StringOption = Options['str'],
-        onChangeFn = jest.fn(),
-        stringOption = renderer.create(
-            <StringOption value="foo" onChange={onChangeFn}/>
-        ),
-        tree = stringOption.toJSON()
+    it("should render", async () => {
+        render(<StringOption value="foo" onChange={() => 0} />);
+    });
+});
 
-    it('should render correctly', () => {
-        expect(tree).toMatchSnapshot()
-    })
+describe("NumberOption Component", () => {
+    const NumberOption = Options["int"];
+    const onChangeFn = jest.fn();
+    const { asFragment } = render(
+        <NumberOption value={1} onChange={onChangeFn} />,
+    );
 
-    it('should handle onChange', () => {
-        let mockEvent = { target: { value: 'bar' }}
-        tree.props.onChange(mockEvent)
-        expect(onChangeFn).toBeCalledWith(mockEvent.target.value)
-    })
+    it("should render correctly", () => {
+        expect(asFragment()).toMatchSnapshot();
+    });
+});
 
-})
+describe("ChoiceOption Component", () => {
+    const onChangeFn = jest.fn();
+    const { asFragment } = render(
+        <ChoicesOption
+            value="a"
+            choices={["a", "b", "c"]}
+            onChange={onChangeFn}
+        />,
+    );
 
-describe('NumberOption Component', () => {
-    let NumberOption = Options['int'],
-        onChangeFn = jest.fn(),
-        numberOption = renderer.create(
-            <NumberOption value={1} onChange={onChangeFn}/>
-        ),
-        tree = numberOption.toJSON()
+    it("should render correctly", () => {
+        expect(asFragment()).toMatchSnapshot();
+    });
+});
 
-    it('should render correctly', () => {
-        expect(tree).toMatchSnapshot()
-    })
+describe("StringOption Component", () => {
+    const onChangeFn = jest.fn();
+    const StringSequenceOption = Options["sequence of str"];
+    const { asFragment } = render(
+        <StringSequenceOption value={["a", "b"]} onChange={onChangeFn} />,
+    );
 
-    it('should handle onChange', () => {
-        let mockEvent = {target: { value: '2'}}
-        tree.props.onChange(mockEvent)
-        expect(onChangeFn).toBeCalledWith(2)
-    })
-})
-
-describe('ChoiceOption Component', () => {
-    let onChangeFn = jest.fn(),
-        choiceOption = renderer.create(
-            <ChoicesOption value='a' choices={['a', 'b', 'c']} onChange={onChangeFn}/>
-        ),
-        tree = choiceOption.toJSON()
-
-    it('should render correctly', () => {
-        expect(tree).toMatchSnapshot()
-    })
-
-    it('should handle onChange', () => {
-        let mockEvent = { target: {value: 'b'} }
-        tree.props.onChange(mockEvent)
-        expect(onChangeFn).toBeCalledWith(mockEvent.target.value)
-    })
-})
-
-describe('StringOption Component', () => {
-    let onChangeFn = jest.fn(),
-        StringSequenceOption = Options['sequence of str'],
-        stringSequenceOption = renderer.create(
-            <StringSequenceOption value={['a', 'b']} onChange={onChangeFn}/>
-        ),
-        tree = stringSequenceOption.toJSON()
-
-    it('should render correctly', () => {
-        expect(tree).toMatchSnapshot()
-    })
-
-    it('should handle onChange', () => {
-        let mockEvent = { target: {value: 'a\nb\nc\n'}}
-        tree.props.onChange(mockEvent)
-        expect(onChangeFn).toBeCalledWith(['a', 'b', 'c', ''])
-    })
-})
+    it("should render correctly", () => {
+        expect(asFragment()).toMatchSnapshot();
+    });
+});

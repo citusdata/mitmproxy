@@ -1,16 +1,19 @@
 # Quick Start
 
 - Install mitmproxy as described in [`../CONTRIBUTING.md`](../CONTRIBUTING.md)
-- Run `node --version` to make sure that you have at least Node.js 14 or above. If you are on **Ubuntu <= 20.04**, you
-  need to
-  [upgrade](https://github.com/nodesource/distributions/blob/master/README.md#installation-instructions).
-- Run `npm install` to install dependencies
-- Run `npm start` to start live-compilation
-- Run `mitmweb` after activating your Python virtualenv (see [`../CONTRIBUTING.md`](../CONTRIBUTING.md)).
+- Run `node --version` to make sure that you have at least Node.js 24 or above.
+- Run `cd ./web` to change to the directory with package.json.
+- Run `npm install` to install dependencies.
+- Run `uv run mitmweb`
+- Run `npm start` in a separate window to start the Vite development server for the web interface.
 
 ## Testing
 
 - Run `npm test` to run the test suite.
+
+## Code formatting
+
+- Run `npm run prettier` to format your code. You can also integrate prettier into your editor, see https://prettier.io/docs/en/editors.html
 
 ## Architecture
 
@@ -29,8 +32,6 @@ files before every release.
 
 ## Developer Tools
 
-- `npm start` supports live-reloading if you install a matching
-  [browser extension](http://livereload.com/extensions/).
 - You can debug application state using the
   [React DevTools](https://reactjs.org/blog/2019/08/15/new-react-devtools.html) and
   [Redux DevTools](https://github.com/reduxjs/redux-devtools) browser extensions.
