@@ -1,8 +1,9 @@
 import React, { useCallback, useState } from "react";
-import { HTTPFlow, HTTPMessage } from "../../flow";
+import type { HTTPFlow, HTTPMessage } from "../../flow";
 import { useAppDispatch, useAppSelector } from "../../ducks";
 import { setContentViewFor } from "../../ducks/ui/flow";
-import { ContentViewData, useContentView } from "./useContentView";
+import type { ContentViewData } from "./useContentView";
+import { useContentView } from "./useContentView";
 import { useContent } from "./useContent";
 import { MessageUtils } from "../../flow/utils";
 import FileChooser from "../common/FileChooser";
@@ -57,7 +58,7 @@ function HttpMessageEdit({ flow, message, stopEdit }: HttpMessageEditProps) {
     const save = async () => {
         await dispatch(
             flowActions.update(flow, {
-                [part]: { content: editedContent || content || "" },
+                [part]: { content: editedContent ?? content ?? "" },
             }),
         );
         stopEdit();
