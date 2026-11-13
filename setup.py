@@ -69,7 +69,7 @@ setup(
     install_requires=[
         "asgiref>=3.2.10,<3.5",
         "blinker>=1.4, <1.5",
-        "Brotli>=1.0,<1.1",
+        "Brotli>=1.0,<=1.2.1",
         "certifi>=2019.9.11",  # no semver here - this should always be on the last release!
         "click>=7.0,<8.1",
         "cryptography>=3.3",
