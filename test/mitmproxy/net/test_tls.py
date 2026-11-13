@@ -1,4 +1,5 @@
 from pathlib import Path
+from unittest import mock
 
 import pytest
 from cryptography.hazmat.primitives.asymmetric import ec
@@ -13,6 +14,13 @@ def test_supported(version):
     # wild assumption: test environments should not do SSLv3 by default.
     expected_support = version is tls.Version.UNBOUNDED
     assert tls.is_supported_version(version) == expected_support
+
+
+@pytest.mark.parametrize("method", ["set_min_proto_version", "set_max_proto_version"])
+def test_supported_protocol_configuration_error(method):
+    with mock.patch.object(SSL.Context, method, side_effect=SSL.Error) as set_version:
+        assert tls.is_supported_version.__wrapped__(tls.Version.UNBOUNDED) is False
+    set_version.assert_called_once_with(tls.Version.UNBOUNDED.value)
 
 
 def test_make_master_secret_logger():

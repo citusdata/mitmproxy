@@ -76,10 +76,10 @@ jobs:
             platform: windows
           - image: ubuntu-latest
             platform: linux-x86_64
-            container: debian:11  # Old version so we get oldest glibc possible.
+            container: debian:12  # Bookworm is the oldest supported Debian release.
           - image: ubuntu-24.04-arm
             platform: linux-arm64
-            container: debian:11  # Old version so we get oldest glibc possible.
+            container: debian:12  # Bookworm is the oldest supported Debian release.
     runs-on: ${{ matrix.image }}
     container:
       image: ${{ matrix.container }}

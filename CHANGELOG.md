@@ -7,6 +7,8 @@
 
 ## Unreleased: mitmproxy next
 
+- Build Linux standalone binaries on Debian 12 (Bookworm), raising the supported glibc baseline from 2.31 to 2.36.
+  ([#5](https://github.com/citusdata/mitmproxy/pull/5), @ihalatci)
 - Fix contentview detection for XML files that start with CRLF.
   ([#8243](https://github.com/mitmproxy/mitmproxy/pull/8243), @ADiTyaRaj8969)
 - mitmweb: Fix the filter input losing half-typed text on unrelated parent re-renders.
